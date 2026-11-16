@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="110" fill="#0f1115"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#20242d" stroke-width="46"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#34d399" stroke-width="46"
+          stroke-linecap="round" stroke-dasharray="800 1069" transform="rotate(-90 256 256)"/>
+  <text x="256" y="290" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="110" font-weight="700" fill="#e9ecf2" text-anchor="middle">16:8</text>
+</svg>

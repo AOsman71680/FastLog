@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FastLog</string>
+    <string name="title_activity_main">FastLog</string>
+    <string name="package_name">com.fastlog.app</string>
+    <string name="custom_url_scheme">com.fastlog.app</string>
+    <string name="widget_description">Shows how long you have been fasting</string>
+    <string name="widget_streak_default">0</string>
+</resources>

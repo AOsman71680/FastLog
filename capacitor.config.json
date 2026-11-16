@@ -1,0 +1,7 @@
+{
+  "appId": "com.fastlog.app",
+  "appName": "FastLog",
+  "webDir": "www",
+  "backgroundColor": "#0f1115",
+  "android": { "allowMixedContent": false }
+}

@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FastLog">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>FastLog</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--card2:#20242d;--line:#2a2f3b;--text:#e9ecf2;--muted:#8a93a6;--accent:#34d399;--blue:#60a5fa;--warn:#f59e0b;--danger:#f87171;--r:18px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));min-height:100vh}
+header{padding:16px 18px 6px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+h1{font-size:22px;margin:0}
+.chip-streak{background:var(--card);padding:7px 12px;border-radius:99px;font-size:14px;white-space:nowrap}
+main{padding:8px 14px}
+section{display:none}
+section.active{display:block}
+.card{background:var(--card);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card h2{font-size:12px;margin:0 0 12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+button{font:inherit;color:var(--text);background:var(--card2);border:0;border-radius:12px;padding:12px 14px;cursor:pointer}
+button:active{transform:scale(.97)}
+button.primary{background:var(--accent);color:#06281d;font-weight:700}
+button.danger{background:#3b1d1d;color:var(--danger)}
+button.small{padding:6px 10px;font-size:13px}
+button:disabled{opacity:.4}
+input,select{font:inherit;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px 12px;width:100%;min-width:0}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.row>.auto{flex:0 0 auto}
+.muted{color:var(--muted);font-size:13px}
+.big{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{padding:8px 12px;font-size:14px}
+.chips button.on{background:var(--blue);color:#06173a;font-weight:600}
+.bar{height:10px;background:var(--card2);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+.bar>div{height:100%;background:var(--accent);transition:width .4s}
+.ringbox{position:relative;width:250px;height:250px;margin:6px auto 4px}
+.ringbox svg{position:absolute;inset:0}
+.ringtxt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ringtxt .timer{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--card2);border-radius:14px;padding:12px}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums;margin-top:2px}
+.stat small{color:var(--muted);font-size:12px}
+.list{list-style:none;padding:0;margin:0}
+.list li{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px;gap:10px}
+.list li:last-child{border:0}
+.bars{display:flex;gap:6px;align-items:flex-end;height:130px;padding-top:6px}
+.bars .col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;font-size:11px;color:var(--muted);gap:4px}
+.bars .bb{flex:1;width:100%;background:var(--card2);border-radius:8px;display:flex;align-items:flex-end;overflow:hidden}
+.bars .bb>div{width:100%;background:var(--accent);border-radius:8px 8px 0 0}
+#chart{width:100%;height:auto;display:block;margin-top:6px}
+#video{width:100%;border-radius:14px;background:#000;margin-bottom:10px}
+#photoPrev{width:100%;border-radius:14px;margin-top:10px;display:none}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
+.modal .card{width:100%;max-width:420px;margin:0}
+nav{position:fixed;bottom:0;left:0;right:0;background:#12151b;border-top:1px solid #222733;display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;background:none;border-radius:0;padding:10px 0 12px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button .ic{font-size:20px;line-height:1}
+nav button.on{color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#263041;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;white-space:nowrap}
+.toast.show{opacity:1}
+.hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
+/* onboarding */
+#onb{position:fixed;inset:0;background:var(--bg);z-index:30;display:none;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.onb-prog{height:4px;background:var(--card2);margin:14px 18px 0;border-radius:99px;overflow:hidden}
+.onb-prog>div{height:100%;background:var(--accent);transition:width .3s}
+.onb-body{flex:1;overflow:auto;padding:22px 20px}
+.onb-body label{display:block;color:var(--muted);font-size:13px;margin-bottom:14px}
+.onb-body label>input,.onb-body label>select{margin-top:6px;color:var(--text);font-size:16px}
+.onb-body label>.chips{margin-top:6px}
+.onb-foot{display:flex;gap:10px;padding:12px 18px 16px}
+.onb-foot button{flex:1}
+.slide{text-align:center;padding-top:8vh}
+.slide .em{font-size:84px;line-height:1}
+.slide h2{font-size:26px;margin:22px 0 10px}
+.slide p{color:var(--muted);font-size:16px;line-height:1.5;margin:0 auto;max-width:320px}
+.ot{font-size:24px;margin:4px 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 18px;line-height:1.45}
+.target{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
+.target b{font-size:22px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FastLog</h1>
+  <div class="row auto" style="gap:8px">
+    <span class="chip-streak" id="hdrStreak">🔥 0</span>
+    <button class="small" onclick="showTab('settings')" aria-label="Settings">⚙︎</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ FAST ============ -->
+<section id="t-fast" class="active">
+  <div class="card">
+    <div class="chips" style="justify-content:center;margin-bottom:8px" id="goalChips">
+      <button data-goal="12">12h</button><button data-goal="14">14h</button>
+      <button data-goal="16">16h</button><button data-goal="18">18h</button>
+      <button data-goal="20">20h</button><button data-goal="24">24h</button>
+    </div>
+    <div class="ringbox">
+      <svg viewBox="0 0 250 250">
+        <circle cx="125" cy="125" r="108" stroke="#20242d" stroke-width="16" fill="none"/>
+        <circle id="ring" cx="125" cy="125" r="108" stroke="#34d399" stroke-width="16" fill="none"
+                stroke-linecap="round" stroke-dasharray="678.58" stroke-dashoffset="678.58"
+                transform="rotate(-90 125 125)"/>
+      </svg>
+      <div class="ringtxt">
+        <div class="muted" id="ringStatus">Not fasting</div>
+        <div class="timer" id="timer">00:00:00</div>
+        <div class="muted" id="ringLabel">Goal 16 h</div>
+      </div>
+    </div>
+    <div class="muted" id="stage" style="text-align:center;margin:6px 0 14px">Start a fast when you're ready</div>
+    <div class="row">
+      <button class="primary" id="startBtn" onclick="startFast()">Start fast</button>
+      <button class="primary" id="endBtn" onclick="endFast()" style="display:none">End fast</button>
+      <button class="danger auto" id="cancelBtn" onclick="cancelFast()" style="display:none">Cancel</button>
+    </div>
+    <div class="hint">Stage descriptions are rough general guides. Everyone's body responds differently.</div>
+  </div>
+
+  <div class="card">
+    <h2>Recent fasts</h2>
+    <ul class="list" id="recentFasts"></ul>
+  </div>
+</section>
+
+<!-- ============ FOOD ============ -->
+<section id="t-food">
+  <div class="card">
+    <h2>Meal</h2>
+    <div class="chips" id="mealChips">
+      <button data-meal="Breakfast">Breakfast</button>
+      <button data-meal="Lunch">Lunch</button>
+      <button data-meal="Dinner">Dinner</button>
+      <button data-meal="Snack">Snack</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kcal-head row" style="margin-bottom:6px">
+      <h2 style="margin:0">Today</h2>
+      <span class="muted" id="kcalTxt" style="text-align:right">0 / 2000 kcal</span>
+    </div>
+    <div class="bar"><div id="kcalBar" style="width:0%"></div></div>
+    <div class="muted" id="macros">Protein 0 g · Carbs 0 g · Fat 0 g</div>
+    <ul class="list" id="mealList" style="margin-top:10px"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Search food by name</h2>
+    <div class="row">
+      <input id="q" placeholder="e.g. oats, chicken breast, hummus" onkeydown="if(event.key==='Enter')searchFood()">
+      <button class="primary auto" onclick="searchFood()">Search</button>
+    </div>
+    <ul class="list" id="results" style="margin-top:8px"></ul>
+    <div class="hint">Data from Open Food Facts (community database). Values can vary, so check labels when accuracy matters.</div>
+  </div>
+
+  <div class="card">
+    <h2>Scan barcode</h2>
+    <button class="primary" style="width:100%" onclick="openScanner()">📷 Scan a product</button>
+    <div class="row" style="margin-top:10px">
+      <input id="manualCode" inputmode="numeric" placeholder="Or type barcode number">
+      <button class="auto" onclick="lookupBarcode(document.getElementById('manualCode').value.trim())">Look up</button>
+    </div>
+    <div class="hint">Point the camera at the barcode, or type the number printed under it.</div>
+  </div>
+
+  <div class="card">
+    <h2>Meal photo</h2>
+    <input type="file" id="photo" accept="image/*" capture="environment">
+    <img id="photoPrev" alt="meal preview">
+    <div class="row" style="margin-top:10px">
+      <input id="photoName" placeholder="Name (optional)">
+      <input id="photoKcal" type="number" inputmode="decimal" placeholder="kcal">
+    </div>
+    <button class="primary" style="width:100%;margin-top:10px" onclick="addPhotoMeal()">Log photo meal</button>
+    <div class="hint">The photo is shown while you're on this screen but is not stored. Enter the calories yourself, from the label, a recipe, or an estimate.</div>
+  </div>
+</section>
+
+<!-- ============ WATER ============ -->
+<section id="t-water">
+  <div class="card" style="text-align:center">
+    <h2 style="text-align:left">Water today</h2>
+    <div class="big" id="waterBig">0.00 L</div>
+    <div class="bar"><div id="waterBar" style="width:0%;background:var(--blue)"></div></div>
+    <div class="muted" id="waterTxt">0 / 2500 ml</div>
+    <div class="row" style="margin-top:16px">
+      <button onclick="addWater(-250)" class="auto">−250</button>
+      <button onclick="addWater(150)">+150</button>
+      <button onclick="addWater(250)">+250</button>
+      <button onclick="addWater(500)">+500</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="customWater()">Custom amount…</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WEIGHT ============ -->
+<section id="t-weight">
+  <div class="card">
+    <h2>Log weight</h2>
+    <div class="row">
+      <input id="wKg" type="number" step="0.1" inputmode="decimal" placeholder="kg">
+      <input id="wDate" type="date">
+      <button class="primary auto" onclick="logWeight()">Save</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:8px">
+      <h2 style="margin:0">Progress</h2>
+    </div>
+    <div class="chips" id="rangeChips" style="margin-bottom:6px">
+      <button data-range="30">30d</button>
+      <button data-range="90" class="on">90d</button>
+      <button data-range="365">1y</button>
+      <button data-range="0">All</button>
+    </div>
+    <svg id="chart" viewBox="0 0 340 200"></svg>
+    <div class="stats" style="margin-top:12px" id="weightStats"></div>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <ul class="list" id="weightList"></ul>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section id="t-stats">
+  <div class="card">
+    <h2>Streaks</h2>
+    <div class="stats" id="streakStats"></div>
+    <div class="hint">A fast day counts when you finish a fast at or above your goal. A logging day counts when you log food or water.</div>
+  </div>
+
+  <div class="card">
+    <h2>Last 7 days fasting</h2>
+    <div class="bars" id="weekBars"></div>
+  </div>
+
+  <div class="card">
+    <h2>Overview</h2>
+    <div class="stats" id="overview"></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="t-settings">
+  <div class="card">
+    <h2>Profile</h2>
+    <div id="profileSummary" class="muted" style="line-height:1.6;margin-bottom:10px"></div>
+    <button style="width:100%" onclick="openOnboarding(3)">Edit profile &amp; recalculate targets</button>
+    <button style="width:100%;margin-top:8px" onclick="openOnboarding(0)">Replay intro</button>
+  </div>
+
+  <div class="card">
+    <h2>Goals</h2>
+    <div style="display:grid;gap:10px">
+      <label class="muted">Default fast length (hours)
+        <select data-set="settings.goalHours">
+          <option value="12">12</option><option value="14">14</option><option value="16">16</option>
+          <option value="18">18</option><option value="20">20</option><option value="24">24</option>
+        </select>
+      </label>
+      <label class="muted">Calories per day (kcal)
+        <input type="number" data-set="settings.kcalGoal" inputmode="numeric">
+      </label>
+      <label class="muted">Water per day (ml)
+        <input type="number" data-set="settings.waterGoal" inputmode="numeric">
+      </label>
+      <label class="muted">Goal weight (kg)
+        <input type="number" step="0.1" data-set="goalWeight" inputmode="decimal">
+      </label>
+      <label class="muted">Height (cm, used for BMI)
+        <input type="number" data-set="height" inputmode="numeric">
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Reminders</h2>
+    <button style="width:100%" onclick="askNotify()">Enable fast-complete alerts</button>
+    <div class="hint">In the Android app you get a notification when your fast goal is reached, even if the app is closed. In a browser, alerts only work while the page is open.</div>
+  </div>
+
+  <div class="card">
+    <h2>Data</h2>
+    <div style="display:grid;gap:10px">
+      <button onclick="exportData()">Export backup (JSON)</button>
+      <label class="muted">Import backup
+        <input type="file" accept="application/json" onchange="importData(this.files[0])">
+      </label>
+      <button class="danger" onclick="resetAll()">Erase all data</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- onboarding -->
+<div id="onb">
+  <div class="onb-prog"><div id="onbBar"></div></div>
+  <div class="onb-body" id="onbBody"></div>
+  <div class="onb-foot">
+    <button id="onbBack" onclick="onbBack()">Back</button>
+    <button class="primary" id="onbNext" onclick="onbNext()">Next</button>
+  </div>
+</div>
+
+<!-- barcode scanner -->
+<div class="modal" id="scanModal">
+  <div class="card">
+    <h2>Point camera at barcode</h2>
+    <video id="video" playsinline muted></video>
+    <button style="width:100%" onclick="closeScanner()">Close</button>
+  </div>
+</div>
+
+<nav>
+  <button data-tab="fast" class="on"><span class="ic">⏱</span>Fast</button>
+  <button data-tab="food"><span class="ic">🍽</span>Food</button>
+  <button data-tab="water"><span class="ic">💧</span>Water</button>
+  <button data-tab="weight"><span class="ic">⚖️</span>Weight</button>
+  <button data-tab="stats"><span class="ic">📊</span>Stats</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="zxing.min.js"></script>
+<script>
+/* ---------- state ---------- */
+const $ = s => document.querySelector(s);
+const KEY = 'fastlog-v1';
+const C = 2 * Math.PI * 108;               // ring circumference
+const DEF = {
+  fast: null, fasts: [], weights: [], goalWeight: null, height: null, profile: null,
+  meals: {}, water: {},
+  settings: { goalHours: 16, kcalGoal: 2000, waterGoal: 2500 }
+};
+let S = load();
+let mealType = 'Breakfast';
+let chartRange = 90;
+let lastResults = [];
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY) || '{}');
+    return { ...structuredClone(DEF), ...d, settings: { ...DEF.settings, ...(d.settings || {}) } };
+  } catch (e) { return structuredClone(DEF); }
+}
+let lastSync = '';
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); syncWidget(); syncAlerts(); }
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+/* schedules one "goal reached" notification in the Android app, even if the app is closed */
+let lastNotif = '';
+function syncAlerts() {
+  try {
+    if (!isNative()) return;
+    const LN = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications; if (!LN) return;
+    const key = S.fast ? `${S.fast.start}-${S.fast.goal}` : '';
+    if (key === lastNotif) return; lastNotif = key;
+    LN.cancel({ notifications: [{ id: 1 }] }).catch(() => {});
+    if (S.fast) {
+      const at = S.fast.start + S.fast.goal * 3600000, goal = S.fast.goal;
+      if (at > Date.now()) LN.requestPermissions().then(() => LN.schedule({ notifications: [{
+        id: 1, title: 'Fast goal reached 🎉', body: `${goal} hours done. Nice work.`,
+        schedule: { at: new Date(at), allowWhileIdle: true } }] })).catch(() => {});
+    }
+  } catch (e) {}
+}
+/* pushes fasting state to the native Android home-screen widget (no-op in a browser) */
+function syncWidget() {
+  try {
+    if (!isNative()) return;
+    const cap = window.Capacitor;
+    const p =(cap.Plugins && cap.Plugins.WidgetBridge) || (cap.registerPlugin && cap.registerPlugin('WidgetBridge'));
+    if (!p) return;
+    const payload = { start: S.fast ? S.fast.start : 0, goal: S.fast ? S.fast.goal : S.settings.goalHours, streak: streakOf(fastDays()).cur };
+    const j = JSON.stringify(payload);
+    if (j === lastSync) return;
+    lastSync = j;
+    p.sync(payload).catch(() => {});
+  } catch (e) {}
+}
+
+/* ---------- helpers ---------- */
+const pad = n => String(n).padStart(2, '0');
+function dayKey(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function fmtHMS(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`;
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function getPath(p) { return p.split('.').reduce((o, k) => (o ? o[k] : undefined), S); }
+function setPath(p, v) { const k = p.split('.'); let o = S; k.slice(0, -1).forEach(x => o = o[x]); o[k.at(-1)] = v; }
+function stage(h) {
+  if (h < 4) return 'Fed state · digesting your last meal';
+  if (h < 12) return 'Blood sugar and insulin settling';
+  if (h < 16) return 'Fat burning ramps up';
+  if (h < 24) return 'Ketosis may be building';
+  return 'Extended fast · stay hydrated, and see a doctor if unwell';
+}
+function notify(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(title, { body, icon: 'icon.svg' }); } catch (e) {}
+  }
+  toast(title);
+}
+
+/* ---------- fasting ---------- */
+function startFast() {
+  if (S.fast) return;
+  S.fast = { start: Date.now(), goal: S.settings.goalHours };
+  save(); render(); toast('Fast started');
+}
+function endFast() {
+  if (!S.fast) return;
+  const f = { start: S.fast.start, goal: S.fast.goal, end: Date.now() };
+  S.fasts.push(f); S.fast = null; save(); render();
+  const h = (f.end - f.start) / 3600000;
+  toast(`Fast logged: ${h.toFixed(1)} h${h >= f.goal ? ' ✅' : ''}`);
+}
+function cancelFast() {
+  if (!S.fast || !confirm('Discard this fast without logging it?')) return;
+  S.fast = null; save(); render();
+}
+function renderFast() {
+  $('#startBtn').style.display = S.fast ? 'none' : '';
+  $('#endBtn').style.display = S.fast ? '' : 'none';
+  $('#cancelBtn').style.display = S.fast ? '' : 'none';
+  document.querySelectorAll('[data-goal]').forEach(b =>
+    b.classList.toggle('on', +b.dataset.goal === S.settings.goalHours));
+  const recent = [...S.fasts].reverse().slice(0, 6);
+  $('#recentFasts').innerHTML = recent.length ? recent.map(f => {
+    const h = (f.end - f.start) / 3600000;
+    const d = new Date(f.end).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    return `<li><span>${d}<br><span class="muted">${h.toFixed(1)} h of ${f.goal} h goal</span></span><span>${h >= f.goal ? '✅' : '—'}</span></li>`;
+  }).join('') : '<li class="muted">No fasts yet. Start your first one.</li>';
+}
+function updateRing() {
+  if (S.fast) {
+    const ms = Date.now() - S.fast.start, goalMs = S.fast.goal * 3600000;
+    const pct = Math.min(1, ms / goalMs);
+    $('#ring').setAttribute('stroke-dashoffset', (C * (1 - pct)).toFixed(2));
+    $('#ring').setAttribute('stroke', pct >= 1 ? '#60a5fa' : '#34d399');
+    $('#ringStatus').textContent = 'Fasting';
+    $('#timer').textContent = fmtHMS(ms);
+    $('#ringLabel').textContent = ms >= goalMs ? 'Goal reached 🎉' : `${fmtHMS(goalMs - ms)} to go · goal ${S.fast.goal} h`;
+    $('#stage').textContent = stage(ms / 3600000);
+    if (ms >= goalMs && !S.fast.notified) {
+      S.fast.notified = true; save();
+      notify('Fast goal reached', `${S.fast.goal} hours done. Nice work.`);
+    }
+  } else {
+    $('#ring').setAttribute('stroke-dashoffset', C.toFixed(2));
+    $('#ring').setAttribute('stroke', '#34d399');
+    $('#ringStatus').textContent = 'Not fasting';
+    $('#timer').textContent = '00:00:00';
+    $('#ringLabel').textContent = `Goal ${S.settings.goalHours} h`;
+    $('#stage').textContent = "Start a fast when you're ready";
+  }
+}
+
+/* ---------- streaks ---------- */
+function fastDays() {
+  const set = new Set();
+  for (const f of S.fasts) if ((f.end - f.start) / 3600000 >= f.goal) set.add(dayKey(new Date(f.end)));
+  if (S.fast && (Date.now() - S.fast.start) / 3600000 >= S.fast.goal) set.add(dayKey());
+  return set;
+}
+function loggingDays() {
+  const set = new Set();
+  for (const k in S.meals) if (S.meals[k]?.length) set.add(k);
+  for (const k in S.water) if (S.water[k] > 0) set.add(k);
+  return set;
+}
+function streakOf(set) {
+  let cur = 0; const d = new Date();
+  if (!set.has(dayKey(d))) d.setDate(d.getDate() - 1);   // today not finished yet, keep yesterday's streak
+  while (set.has(dayKey(d))) { cur++; d.setDate(d.getDate() - 1); }
+  const keys = [...set].sort(); let best = 0, run = 0, prev = null;
+  for (const k of keys) {
+    const a = new Date(prev + 'T12:00'), b = new Date(k + 'T12:00');
+    run = prev && Math.round((b - a) / 864e5) === 1 ? run + 1 : 1;
+    best = Math.max(best, run); prev = k;
+  }
+  return { cur, best: Math.max(best, cur) };
+}
+
+/* ---------- food ---------- */
+function addMeal(e) {
+  const k = dayKey();
+  (S.meals[k] = S.meals[k] || []).push({ ...e, ts: Date.now() });
+  save(); render(); toast('Logged');
+}
+function delMeal(i) {
+  const k = dayKey(); S.meals[k].splice(i, 1);
+  save(); render();
+}
+async function searchFood() {
+  const q = $('#q').value.trim(); if (!q) return;
+  $('#results').innerHTML = '<li class="muted">Searching…</li>';
+  try {
+    const url = 'https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=15&search_terms=' + encodeURIComponent(q);
+    const r = await fetch(url); const j = await r.json();
+    lastResults = (j.products || []).filter(p => perKcal(p) != null);
+    $('#results').innerHTML = lastResults.length ? lastResults.map((p, i) => `
+      <li onclick="askGrams(lastResults[${i}])" style="cursor:pointer">
+        <span>${esc(p.product_name || 'Unnamed')}<br><span class="muted">${esc(p.brands || '')}</span></span>
+        <span class="muted">${Math.round(perKcal(p))} kcal/100g</span>
+      </li>`).join('') : '<li class="muted">No results. Try another name.</li>';
+  } catch (e) {
+    $('#results').innerHTML = '<li class="muted">Search failed. Check your connection.</li>';
+  }
+}
+function perKcal(p) {
+  const n = p.nutriments || {};
+  if (n['energy-kcal_100g'] != null) return +n['energy-kcal_100g'];
+  if (n.energy_100g != null) return +n.energy_100g / 4.184;
+  return null;
+}
+function askGrams(p) {
+  if (!p) return;
+  const per = perKcal(p);
+  if (per == null) return toast('No calorie data for this item');
+  const g = parseFloat(prompt(`${p.product_name || 'Item'}\nHow many grams?`, '100'));
+  if (!(g > 0)) return;
+  const n = p.nutriments || {}, k = g / 100;
+  addMeal({
+    meal: mealType, name: p.product_name || 'Unnamed', grams: g,
+    kcal: per * k, p: (n.proteins_100g || 0) * k,
+    c: (n.carbohydrates_100g || 0) * k, f: (n.fat_100g || 0) * k
+  });
+}
+let stream = null, scanTimer = null, zx = null;
+async function openScanner() {
+  const hasNative = 'BarcodeDetector' in window, hasZX = !!window.ZXing;
+  if (!hasNative && !hasZX) return toast('Scanner unavailable. Type the number.');
+  $('#scanModal').style.display = 'flex';
+  try {
+    if (hasNative) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      $('#video').srcObject = stream; await $('#video').play();
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
+      scanTimer = setInterval(async () => {
+        try {
+          const codes = await det.detect($('#video'));
+          if (codes.length) { const code = codes[0].rawValue; closeScanner(); lookupBarcode(code); }
+        } catch (e) {}
+      }, 400);
+    } else {
+      // bundled ZXing reader: works inside the Android app and on iPhone Safari
+      const Z = window.ZXing, hints = new Map();
+      hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128]);
+      zx = new Z.BrowserMultiFormatReader(hints);
+      zx.decodeFromConstraints({ video: { facingMode: 'environment' } }, 'video', (res) => {
+        if (res) { const code = res.getText(); closeScanner(); lookupBarcode(code); }
+      }).catch(() => { toast('Camera unavailable'); closeScanner(); });
+    }
+  } catch (e) { toast('Camera unavailable'); closeScanner(); }
+}
+function closeScanner() {
+  clearInterval(scanTimer);
+  if (zx) { try { zx.reset(); } catch (e) {} zx = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $('#scanModal').style.display = 'none';
+}
+async function lookupBarcode(code) {
+  if (!code) return;
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+    const j = await r.json();
+    if (j.status === 1) askGrams(j.product); else toast('Product not found');
+  } catch (e) { toast('Lookup failed'); }
+}
+function addPhotoMeal() {
+  const kcal = parseFloat($('#photoKcal').value);
+  if (!(kcal > 0)) return toast('Enter the calories first');
+  addMeal({ meal: mealType, name: $('#photoName').value.trim() || 'Meal photo', grams: 0, kcal, p: 0, c: 0, f: 0 });
+  $('#photoKcal').value = ''; $('#photoName').value = '';
+  $('#photo').value = ''; $('#photoPrev').style.display = 'none';
+}
+$('#photo').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = $('#photoPrev'); img.src = URL.createObjectURL(f); img.style.display = 'block';
+});
+function renderFood() {
+  const list = S.meals[dayKey()] || [];
+  const t = list.reduce((a, e) => ({ k: a.k + e.kcal, p: a.p + e.p, c: a.c + e.c, f: a.f + e.f }), { k: 0, p: 0, c: 0, f: 0 });
+  $('#kcalTxt').textContent = `${Math.round(t.k)} / ${S.settings.kcalGoal} kcal`;
+  $('#kcalBar').style.width = Math.min(100, t.k / S.settings.kcalGoal * 100) + '%';
+  $('#kcalBar').style.background = t.k > S.settings.kcalGoal ? 'var(--warn)' : 'var(--accent)';
+  $('#macros').textContent = `Protein ${t.p.toFixed(0)} g · Carbs ${t.c.toFixed(0)} g · Fat ${t.f.toFixed(0)} g`;
+  $('#mealList').innerHTML = list.length ? list.map((e, i) => `
+    <li><span>${esc(e.meal)} · ${esc(e.name)}${e.grams ? ` <span class="muted">${Math.round(e.grams)} g</span>` : ''}</span>
+    <span style="white-space:nowrap">${Math.round(e.kcal)} kcal <button class="danger small" onclick="delMeal(${i})">✕</button></span></li>`).join('')
+    : '<li class="muted">Nothing logged today</li>';
+  document.querySelectorAll('[data-meal]').forEach(b => b.classList.toggle('on', b.dataset.meal === mealType));
+}
+
+/* ---------- water ---------- */
+function addWater(ml) {
+  const k = dayKey(); const before = S.water[k] || 0;
+  S.water[k] = Math.max(0, before + ml); save(); render();
+  if (before < S.settings.waterGoal && S.water[k] >= S.settings.waterGoal) toast('Water goal reached 💧');
+}
+function customWater() {
+  const v = parseInt(prompt('Amount in ml (use negative to remove)', '330'));
+  if (v) addWater(v);
+}
+function renderWater() {
+  const v = S.water[dayKey()] || 0, g = S.settings.waterGoal;
+  $('#waterBig').textContent = (v / 1000).toFixed(2) + ' L';
+  $('#waterTxt').textContent = `${v} / ${g} ml`;
+  $('#waterBar').style.width = Math.min(100, v / g * 100) + '%';
+}
+
+/* ---------- weight ---------- */
+function logWeight() {
+  const kg = parseFloat($('#wKg').value);
+  const date = $('#wDate').value || dayKey();
+  if (!(kg > 0)) return toast('Enter your weight');
+  S.weights = S.weights.filter(w => w.date !== date);
+  S.weights.push({ date, kg });
+  S.weights.sort((a, b) => a.date.localeCompare(b.date));
+  save(); $('#wKg').value = ''; render(); toast('Weight saved');
+}
+function delWeight(date) {
+  S.weights = S.weights.filter(w => w.date !== date); save(); render();
+}
+function drawChart() {
+  const svg = $('#chart'), W = 340, H = 200, pl = 36, pr = 10, pt = 10, pb = 24;
+  let pts = [...S.weights].sort((a, b) => a.date.localeCompare(b.date));
+  if (chartRange) { const cut = dayKey(new Date(Date.now() - chartRange * 864e5)); pts = pts.filter(p => p.date >= cut); }
+  if (!pts.length) {
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="#8a93a6" font-size="13" text-anchor="middle">Log a weight to see your graph</text>`;
+    return;
+  }
+  const at = d => new Date(d + 'T12:00').getTime();
+  const t0 = at(pts[0].date), t1 = at(pts.at(-1).date);
+  const vals = pts.map(p => p.kg).concat(S.goalWeight ? [S.goalWeight] : []);
+  const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
+  const X = t => pl + (t1 === t0 ? (W - pl - pr) / 2 : (t - t0) / (t1 - t0) * (W - pl - pr));
+  const Y = v => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
+  let s = '';
+  for (let i = 0; i <= 3; i++) {
+    const v = lo + (hi - lo) * i / 3, y = Y(v);
+    s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="#222733"/>`;
+    s += `<text x="${pl - 6}" y="${y + 4}" fill="#8a93a6" font-size="10" text-anchor="end">${v.toFixed(1)}</text>`;
+  }
+  if (S.goalWeight) {
+    const y = Y(S.goalWeight);
+    s += `<line x1="${pl}" x2="${W - pr}" y1="${y}" y2="${y}" stroke="#f59e0b" stroke-dasharray="4 4"/>`;
+    s += `<text x="${W - pr}" y="${y - 4}" fill="#f59e0b" font-size="10" text-anchor="end">goal</text>`;
+  }
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(at(p.date)).toFixed(1)},${Y(p.kg).toFixed(1)}`).join(' ');
+  if (pts.length > 1) s += `<path d="${d}" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linejoin="round"/>`;
+  pts.forEach(p => { s += `<circle cx="${X(at(p.date)).toFixed(1)}" cy="${Y(p.kg).toFixed(1)}" r="3.5" fill="#34d399"/>`; });
+  s += `<text x="${pl}" y="${H - 6}" fill="#8a93a6" font-size="10">${pts[0].date.slice(5)}</text>`;
+  s += `<text x="${W - pr}" y="${H - 6}" fill="#8a93a6" font-size="10" text-anchor="end">${pts.at(-1).date.slice(5)}</text>`;
+  svg.innerHTML = s;
+  // stats
+  const first = pts[0].kg, last = pts.at(-1).kg, change = last - first;
+  const toGoal = S.goalWeight ? last - S.goalWeight : null;
+  const bmi = S.height ? last / ((S.height / 100) ** 2) : null;
+  $('#weightStats').innerHTML = `
+    <div class="stat"><small>Current</small><b>${last.toFixed(1)} kg</b></div>
+    <div class="stat"><small>Change in range</small><b style="color:${change <= 0 ? 'var(--accent)' : 'var(--warn)'}">${change > 0 ? '+' : ''}${change.toFixed(1)} kg</b></div>
+    <div class="stat"><small>To goal</small><b>${toGoal == null ? '—' : (toGoal > 0 ? toGoal.toFixed(1) + ' kg' : 'Reached ✅')}</b></div>
+    <div class="stat"><small>BMI</small><b>${bmi == null ? '—' : bmi.toFixed(1)}</b></div>`;
+}
+function renderWeight() {
+  if (!$('#wDate').value) $('#wDate').value = dayKey();
+  document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('on', +b.dataset.range === chartRange));
+  drawChart();
+  const list = [...S.weights].reverse().slice(0, 30);
+  $('#weightList').innerHTML = list.length ? list.map(w => `
+    <li><span>${w.date}</span><span>${w.kg.toFixed(1)} kg <button class="danger small" onclick="delWeight('${w.date}')">✕</button></span></li>`).join('')
+    : '<li class="muted">No weigh-ins yet</li>';
+}
+
+/* ---------- stats ---------- */
+function renderStats() {
+  const fs = streakOf(fastDays()), ls = streakOf(loggingDays());
+  $('#streakStats').innerHTML = `
+    <div class="stat"><small>🔥 Fast streak</small><b>${fs.cur} days</b><small>best ${fs.best}</small></div>
+    <div class="stat"><small>📝 Logging streak</small><b>${ls.cur} days</b><small>best ${ls.best}</small></div>`;
+  $('#hdrStreak').textContent = `🔥 ${fs.cur}`;
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
+  $('#weekBars').innerHTML = days.map(d => {
+    const k = dayKey(d);
+    const h = S.fasts.filter(f => dayKey(new Date(f.end)) === k).reduce((a, f) => a + (f.end - f.start) / 3600000, 0);
+    return `<div class="col"><div class="bb"><div style="height:${Math.min(100, h / 24 * 100)}%"></div></div>
+            <span>${d.toLocaleDateString(undefined, { weekday: 'short' })}</span><small>${h.toFixed(0)}h</small></div>`;
+  }).join('');
+
+  const hrs = S.fasts.map(f => (f.end - f.start) / 3600000);
+  const avg = hrs.length ? hrs.reduce((a, b) => a + b, 0) / hrs.length : 0;
+  const longest = hrs.length ? Math.max(...hrs) : 0;
+  const totalW = Object.values(S.water).reduce((a, b) => a + b, 0);
+  $('#overview').innerHTML = `
+    <div class="stat"><small>Fasts completed</small><b>${S.fasts.length}</b></div>
+    <div class="stat"><small>Avg fast</small><b>${avg.toFixed(1)} h</b></div>
+    <div class="stat"><small>Longest fast</small><b>${longest.toFixed(1)} h</b></div>
+    <div class="stat"><small>Water logged (all time)</small><b>${(totalW / 1000).toFixed(1)} L</b></div>`;
+}
+
+/* ---------- settings ---------- */
+function renderSettings() {
+  document.querySelectorAll('[data-set]').forEach(el => {
+    if (document.activeElement === el) return;
+    const v = getPath(el.dataset.set);
+    el.value = v ?? '';
+  });
+}
+document.querySelectorAll('[data-set]').forEach(el => el.addEventListener('change', () => {
+  const raw = el.value;
+  const v = raw === '' ? null : (el.tagName === 'SELECT' ? +raw : parseFloat(raw));
+  setPath(el.dataset.set, v);
+  save(); render(); toast('Saved');
+}));
+function askNotify() {
+  if (isNative()) {
+    const LN = window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+    if (LN) return LN.requestPermissions().then(r => toast(r.display === 'granted' ? 'Alerts enabled' : 'Alerts not allowed')).catch(() => toast('Could not ask for permission'));
+  }
+  if (!('Notification' in window)) return toast('Notifications not supported here');
+  Notification.requestPermission().then(p => toast(p === 'granted' ? 'Alerts enabled' : 'Alerts not allowed'));
+}
+function exportData() {
+  const b = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b); a.download = `fastlog-${dayKey()}.json`; a.click();
+}
+function importData(file) {
+  if (!file) return;
+  file.text().then(t => {
+    const d = JSON.parse(t);
+    S = { ...structuredClone(DEF), ...d, settings: { ...DEF.settings, ...(d.settings || {}) } };
+    save(); render(); toast('Imported');
+  }).catch(() => toast('Invalid backup file'));
+}
+function resetAll() {
+  if (!confirm('Erase ALL fasting, food, water and weight data? This cannot be undone.')) return;
+  S = structuredClone(DEF); save(); render(); toast('Data erased');
+}
+
+/* ---------- onboarding & profile ---------- */
+const ACT = [[1.2, 'Sedentary (desk job, little exercise)'], [1.375, 'Light (1–3 workouts a week)'],
+             [1.55, 'Moderate (3–5 workouts a week)'], [1.725, 'Very active (6–7 workouts a week)']];
+let ob = { step: 0, d: {} };
+const lastWeight = () => S.weights.length ? S.weights[S.weights.length - 1].kg : '';
+
+function openOnboarding(step) {
+  const p = S.profile || {};
+  ob = { step, d: {
+    name: p.name || '', sex: p.sex || 'male', birthYear: p.birthYear || '',
+    height: S.height || '', weight: lastWeight(), goalWeight: S.goalWeight || '',
+    activity: p.activity || 1.375, goalHours: S.settings.goalHours, kcal: S.settings.kcalGoal, water: S.settings.waterGoal
+  } };
+  $('#onb').style.display = 'flex';
+  renderOnb();
+}
+function collectOnb() {
+  const d = ob.d, g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
+  const set = (k, id, num) => { const v = g(id); if (v !== undefined) d[k] = num ? (v === '' ? '' : parseFloat(v)) : v.trim(); };
+  set('name', 'o_name'); set('birthYear', 'o_year', 1); set('height', 'o_h', 1);
+  set('weight', 'o_w', 1); set('goalWeight', 'o_gw', 1);
+  const a = g('o_act'); if (a !== undefined) d.activity = parseFloat(a);
+  set('kcal', 'o_kcal', 1); set('water', 'o_water', 1);
+}
+function computeTargets() {
+  const d = ob.d, age = new Date().getFullYear() - d.birthYear;
+  const bmr = 10 * d.weight + 6.25 * d.height - 5 * age + (d.sex === 'male' ? 5 : -161);   // Mifflin-St Jeor
+  const tdee = bmr * d.activity;
+  let k = d.goalWeight < d.weight - 0.5 ? tdee - 500 : d.goalWeight > d.weight + 0.5 ? tdee + 300 : tdee;
+  k = Math.max(k, d.sex === 'male' ? 1500 : 1200);
+  d.tdee = Math.round(tdee); d.kcal = Math.round(k / 50) * 50;
+  d.water = Math.round(d.weight * 35 / 50) * 50;
+}
+function onbBack() { collectOnb(); ob.step = Math.max(0, ob.step - 1); renderOnb(); }
+function onbNext() {
+  collectOnb(); const d = ob.d, st = ob.step, yr = new Date().getFullYear();
+  if (st === 3) {
+    if (!(d.birthYear > 1900 && d.birthYear <= yr)) return toast('Enter a valid birth year');
+    if (yr - d.birthYear < 18) return toast('FastLog is for adults aged 18+');
+    if (!(d.height >= 100 && d.height <= 250)) return toast('Enter your height in cm');
+  }
+  if (st === 4) {
+    if (!(d.weight >= 30 && d.weight <= 300)) return toast('Enter your weight in kg');
+    if (!(d.goalWeight >= 30 && d.goalWeight <= 300)) return toast('Enter your goal weight in kg');
+    computeTargets();
+  }
+  if (st === 5) {
+    if (!(d.kcal >= 800) || !(d.water >= 500)) return toast('Check your calorie and water targets');
+    return finishOnb();
+  }
+  ob.step++; renderOnb();
+}
+function finishOnb() {
+  const d = ob.d, today = dayKey();
+  S.profile = { name: d.name, sex: d.sex, birthYear: d.birthYear, activity: d.activity };
+  S.height = d.height; S.goalWeight = d.goalWeight;
+  S.settings.goalHours = d.goalHours; S.settings.kcalGoal = d.kcal; S.settings.waterGoal = d.water;
+  S.weights = S.weights.filter(w => w.date !== today);
+  S.weights.push({ date: today, kg: d.weight });
+  S.weights.sort((a, b) => a.date.localeCompare(b.date));
+  save(); $('#onb').style.display = 'none'; showTab('fast'); toast(d.name ? `Welcome, ${d.name}!` : 'All set!');
+}
+function renderOnb() {
+  const d = ob.d, st = ob.step, b = $('#onbBody');
+  $('#onbBar').style.width = ((st + 1) / 6 * 100) + '%';
+  $('#onbBack').style.visibility = (st === 0 || (st === 3 && S.profile)) ? 'hidden' : 'visible';
+  $('#onbNext').textContent = st === 5 ? (S.profile ? 'Save' : 'Start fasting') : st === 2 ? 'Get started' : 'Next';
+  if (st < 3) {
+    const s = [['⏱', 'Fast with focus', 'Start a fast in one tap and watch your ring fill. See how long you have been fasting right from your home screen.'],
+               ['🍽', 'Track what you eat', 'Search foods, scan barcodes, and keep an eye on calories, macros and water.'],
+               ['📈', 'See real progress', 'Weight graphs, streaks and weekly stats keep you motivated every day.']][st];
+    b.innerHTML = `<div class="slide"><div class="em">${s[0]}</div><h2>${s[1]}</h2><p>${s[2]}</p></div>`;
+  } else if (st === 3) {
+    b.innerHTML = `<h2 class="ot">About you</h2><p class="sub">This helps estimate your daily calorie needs. It stays on your phone.</p>
+      <label>Your name<input id="o_name" value="${esc(d.name)}" placeholder="Optional"></label>
+      <label>Sex (used for the calorie estimate)
+        <div class="chips"><button data-osex="male" class="${d.sex === 'male' ? 'on' : ''}">Male</button><button data-osex="female" class="${d.sex === 'female' ? 'on' : ''}">Female</button></div></label>
+      <label>Birth year<input id="o_year" type="number" inputmode="numeric" placeholder="e.g. 1995" value="${esc(d.birthYear)}"></label>
+      <label>Height (cm)<input id="o_h" type="number" inputmode="decimal" placeholder="e.g. 175" value="${esc(d.height)}"></label>`;
+  } else if (st === 4) {
+    b.innerHTML = `<h2 class="ot">Your body &amp; goal</h2><p class="sub">Your starting weight becomes the first point on your graph.</p>
+      <label>Current weight (kg)<input id="o_w" type="number" step="0.1" inputmode="decimal" value="${esc(d.weight)}"></label>
+      <label>Goal weight (kg)<input id="o_gw" type="number" step="0.1" inputmode="decimal" value="${esc(d.goalWeight)}"></label>
+      <label>Activity level<select id="o_act">${ACT.map(a => `<option value="${a[0]}" ${a[0] === d.activity ? 'selected' : ''}>${a[1]}</option>`).join('')}</select></label>`;
+  } else {
+    const bmi = d.goalWeight / ((d.height / 100) ** 2);
+    const warn = bmi < 18.5 ? `<div class="hint" style="color:var(--warn)">Your goal weight is below the healthy BMI range (${bmi.toFixed(1)}). Please talk to a doctor before aiming for it.</div>` : '';
+    b.innerHTML = `<h2 class="ot">Your plan</h2><p class="sub">Pick a fasting window and adjust the targets if you like.</p>
+      <label>Fasting window
+        <div class="chips">${[12, 14, 16, 18, 20].map(h => `<button data-ogoal="${h}" class="${d.goalHours === h ? 'on' : ''}">${h}:${24 - h}</button>`).join('')}</div></label>
+      <div class="target"><span class="muted">Estimated daily burn</span><br><b>${d.tdee} kcal</b></div>
+      <label>Daily calorie target (kcal)<input id="o_kcal" type="number" inputmode="numeric" value="${d.kcal}"></label>
+      <label>Daily water target (ml)<input id="o_water" type="number" inputmode="numeric" value="${d.water}"></label>
+      ${warn}
+      <div class="hint">These are estimates, not medical advice. Check with a doctor before fasting if you are pregnant or breastfeeding, have diabetes, take medication, or have a history of disordered eating.</div>`;
+  }
+}
+document.addEventListener('click', e => {
+  const s = e.target.closest('[data-osex]'), g = e.target.closest('[data-ogoal]');
+  if (s) { ob.d.sex = s.dataset.osex; s.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === s)); }
+  if (g) { ob.d.goalHours = +g.dataset.ogoal; g.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === g)); }
+});
+function renderProfile() {
+  const p = S.profile; if (!p) return;
+  const age = new Date().getFullYear() - p.birthYear;
+  $('#profileSummary').innerHTML = `${esc(p.name || 'No name set')} · ${p.sex === 'male' ? 'Male' : 'Female'}, ${age} y<br>${S.height} cm · goal ${S.goalWeight} kg`;
+  $('h1').textContent = p.name ? `Hi, ${p.name}` : 'FastLog';
+}
+
+/* ---------- navigation & render ---------- */
+function showTab(name) {
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === 't-' + name));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  window.scrollTo(0, 0);
+  render();
+}
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-goal]'); if (g) { S.settings.goalHours = +g.dataset.goal; save(); render(); return; }
+  const m = e.target.closest('[data-meal]'); if (m) { mealType = m.dataset.meal; renderFood(); return; }
+  const r = e.target.closest('[data-range]'); if (r) { chartRange = +r.dataset.range; renderWeight(); }
+});
+
+function render() {
+  renderFast(); renderFood(); renderWater(); renderWeight(); renderStats(); renderSettings(); renderProfile(); updateRing();
+}
+function tick() { updateRing(); }
+
+render();
+if (!S.profile) openOnboarding(0);
+syncWidget();
+setInterval(tick, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
