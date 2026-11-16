@@ -1,4 +1,4 @@
-const CACHE = 'fastlog-v1';
+const CACHE = 'fastlog-v2';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon.svg', 'zxing.min.js'];
 
 self.addEventListener('install', e => {
@@ -6,17 +6,22 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
+// Network first (so updates show up), falling back to the cache when offline.
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return; // let API calls go straight to the network
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+    fetch(e.request).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;
-    }))
+    }).catch(() => caches.match(e.request))
   );
 });

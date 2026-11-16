@@ -106,7 +106,7 @@ nav button.on{color:var(--accent)}
     <div class="chips" style="justify-content:center;margin-bottom:8px" id="goalChips">
       <button data-goal="12">12h</button><button data-goal="14">14h</button>
       <button data-goal="16">16h</button><button data-goal="18">18h</button>
-      <button data-goal="20">20h</button><button data-goal="24">24h</button>
+      <button data-goal="20">20h</button><button data-goal="23">23h</button><button data-goal="24">24h</button>
     </div>
     <div class="ringbox">
       <svg viewBox="0 0 250 250">
@@ -127,6 +127,7 @@ nav button.on{color:var(--accent)}
       <button class="primary" id="endBtn" onclick="endFast()" style="display:none">End fast</button>
       <button class="danger auto" id="cancelBtn" onclick="cancelFast()" style="display:none">Cancel</button>
     </div>
+    <button id="backBtn" style="width:100%;margin-top:10px" onclick="openBackdate()">⏪ Forgot to start? Set start time</button>
     <div class="hint">Stage descriptions are rough general guides. Everyone's body responds differently.</div>
   </div>
 
@@ -179,15 +180,21 @@ nav button.on{color:var(--accent)}
   </div>
 
   <div class="card">
-    <h2>Meal photo</h2>
+    <h2>Meal photo scanner (AI)</h2>
     <input type="file" id="photo" accept="image/*" capture="environment">
     <img id="photoPrev" alt="meal preview">
+    <div id="aiBox" style="display:none;margin-top:10px">
+      <input id="aiHint" placeholder="What is it? (optional, improves accuracy)">
+      <button class="primary" id="aiBtn" style="width:100%;margin-top:10px" onclick="estimateMeal()">✨ Estimate with AI</button>
+      <ul class="list" id="aiResult" style="margin-top:8px"></ul>
+    </div>
+    <div class="muted" style="margin-top:14px">Or log it manually:</div>
     <div class="row" style="margin-top:10px">
       <input id="photoName" placeholder="Name (optional)">
       <input id="photoKcal" type="number" inputmode="decimal" placeholder="kcal">
     </div>
     <button class="primary" style="width:100%;margin-top:10px" onclick="addPhotoMeal()">Log photo meal</button>
-    <div class="hint">The photo is shown while you're on this screen but is not stored. Enter the calories yourself, from the label, a recipe, or an estimate.</div>
+    <div class="hint">The photo is resized and sent to Anthropic's Claude only when you tap Estimate. It is not stored. AI estimates can be well off, so adjust the calories before logging.</div>
   </div>
 </section>
 
@@ -275,7 +282,7 @@ nav button.on{color:var(--accent)}
       <label class="muted">Default fast length (hours)
         <select data-set="settings.goalHours">
           <option value="12">12</option><option value="14">14</option><option value="16">16</option>
-          <option value="18">18</option><option value="20">20</option><option value="24">24</option>
+          <option value="18">18</option><option value="20">20</option><option value="23">23</option><option value="24">24</option>
         </select>
       </label>
       <label class="muted">Calories per day (kcal)
@@ -291,6 +298,22 @@ nav button.on{color:var(--accent)}
         <input type="number" data-set="height" inputmode="numeric">
       </label>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>AI meal scanner</h2>
+    <div style="display:grid;gap:10px">
+      <label class="muted">Anthropic API key
+        <input type="password" id="aiKey" placeholder="sk-ant-..." autocomplete="off" autocapitalize="off" spellcheck="false" onchange="saveAi()">
+      </label>
+      <label class="muted">Model
+        <select id="aiModel" onchange="saveAi()">
+          <option value="claude-sonnet-5-5">Sonnet 5.5 · more accurate</option>
+          <option value="claude-haiku-5-5">Haiku 5.5 · cheaper, faster</option>
+        </select>
+      </label>
+    </div>
+    <div class="hint">Create a key at console.anthropic.com (API billing is separate from a Claude subscription) and set a low monthly spend limit there. The key stays on this phone and is left out of backups.</div>
   </div>
 
   <div class="card">
@@ -312,6 +335,22 @@ nav button.on{color:var(--accent)}
 </section>
 
 </main>
+
+<!-- start-time picker -->
+<div class="modal" id="bdModal">
+  <div class="card">
+    <h2>When did you start fasting?</h2>
+    <input type="time" id="bdTime" style="font-size:20px">
+    <div class="chips" style="margin-top:10px">
+      <button data-bday="0">Today</button><button data-bday="1">Yesterday</button><button data-bday="2">2 days ago</button>
+    </div>
+    <div class="muted" id="bdPrev" style="margin:14px 0;min-height:18px"></div>
+    <div class="row">
+      <button onclick="closeBackdate()">Cancel</button>
+      <button class="primary" onclick="confirmBackdate()">Set start time</button>
+    </div>
+  </div>
+</div>
 
 <!-- onboarding -->
 <div id="onb">
@@ -350,6 +389,7 @@ const KEY = 'fastlog-v1';
 const C = 2 * Math.PI * 108;               // ring circumference
 const DEF = {
   fast: null, fasts: [], weights: [], goalWeight: null, height: null, profile: null,
+  ai: { key: '', model: 'claude-sonnet-5-5' },
   meals: {}, water: {},
   settings: { goalHours: 16, kcalGoal: 2000, waterGoal: 2500 }
 };
@@ -444,7 +484,44 @@ function cancelFast() {
   if (!S.fast || !confirm('Discard this fast without logging it?')) return;
   S.fast = null; save(); render();
 }
+/* start (or move the start of) a fast at an earlier time */
+let bd = { day: 0 };
+const fmtHM = ms => { const m = Math.floor(ms / 60000); return `${Math.floor(m / 60)}h ${m % 60}m`; };
+function openBackdate() {
+  const now = new Date(), base = S.fast ? new Date(S.fast.start) : now;
+  const sod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  bd.day = Math.max(0, Math.min(2, Math.round((sod(now) - sod(base)) / 864e5)));
+  $('#bdTime').value = `${pad(base.getHours())}:${pad(base.getMinutes())}`;
+  $('#bdModal').style.display = 'flex'; updBd();
+}
+function closeBackdate() { $('#bdModal').style.display = 'none'; }
+function bdTs() {
+  const v = $('#bdTime').value; if (!v) return null;
+  const [h, m] = v.split(':').map(Number), d = new Date();
+  d.setDate(d.getDate() - bd.day); d.setHours(h, m, 0, 0); return d.getTime();
+}
+function updBd() {
+  document.querySelectorAll('[data-bday]').forEach(b => b.classList.toggle('on', +b.dataset.bday === bd.day));
+  const ts = bdTs(), el = $('#bdPrev');
+  if (ts == null) el.textContent = 'Pick a time';
+  else if (ts > Date.now()) el.textContent = 'That time is in the future. Pick an earlier time or day.';
+  else el.textContent = `Started ${new Date(ts).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} · ${fmtHM(Date.now() - ts)} ago`;
+}
+function confirmBackdate() {
+  const ts = bdTs();
+  if (ts == null) return toast('Pick a time');
+  if (ts > Date.now()) return toast('That time is in the future');
+  const goal = S.fast ? S.fast.goal : S.settings.goalHours;
+  S.fast = { start: ts, goal, notified: ts + goal * 3600000 <= Date.now() };
+  save(); render(); closeBackdate(); toast('Start time set');
+}
+$('#bdTime').addEventListener('input', updBd);
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-bday]'); if (b) { bd.day = +b.dataset.bday; updBd(); }
+});
+
 function renderFast() {
+  $('#backBtn').textContent = S.fast ? '✏️ Change start time' : '⏪ Forgot to start? Set start time';
   $('#startBtn').style.display = S.fast ? 'none' : '';
   $('#endBtn').style.display = S.fast ? '' : 'none';
   $('#cancelBtn').style.display = S.fast ? '' : 'none';
@@ -598,12 +675,88 @@ function addPhotoMeal() {
   if (!(kcal > 0)) return toast('Enter the calories first');
   addMeal({ meal: mealType, name: $('#photoName').value.trim() || 'Meal photo', grams: 0, kcal, p: 0, c: 0, f: 0 });
   $('#photoKcal').value = ''; $('#photoName').value = '';
-  $('#photo').value = ''; $('#photoPrev').style.display = 'none';
+  $('#photo').value = ''; $('#photoPrev').style.display = 'none'; $('#aiBox').style.display = 'none'; photoB64 = null;
 }
-$('#photo').addEventListener('change', e => {
+/* ---- AI meal scanner: sends a downsized photo to Claude, shows editable estimates ---- */
+let photoB64 = null, aiItems = [], aiNote = '';
+function resizeImage(file, max) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const s = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas');
+      c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', 0.8); URL.revokeObjectURL(url);
+      resolve({ url: data, b64: data.split(',')[1] });
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    im.src = url;
+  });
+}
+$('#photo').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
-  const img = $('#photoPrev'); img.src = URL.createObjectURL(f); img.style.display = 'block';
+  try {
+    const r = await resizeImage(f, 1024); photoB64 = r.b64;
+    const img = $('#photoPrev'); img.src = r.url; img.style.display = 'block';
+    $('#aiBox').style.display = 'block'; $('#aiResult').innerHTML = ''; aiItems = [];
+  } catch (err) { toast('Could not read that photo'); }
 });
+async function estimateMeal() {
+  const key = (S.ai && S.ai.key || '').trim();
+  if (!key) { toast('Add your AI key in Settings first'); showTab('settings'); return; }
+  if (!photoB64) return toast('Take or choose a photo first');
+  const btn = $('#aiBtn'); btn.disabled = true; btn.textContent = 'Analyzing…';
+  const hint = $('#aiHint').value.trim();
+  const prompt = 'You are a nutrition assistant. Identify each food and drink visible in this meal photo and estimate the portion size in grams and the nutrition for that portion.' +
+    (hint ? ` The person says this is: ${hint}.` : '') +
+    ' Reply with ONLY JSON in this exact shape: {"items":[{"name":string,"grams":number,"kcal":number,"protein_g":number,"carbs_g":number,"fat_g":number}],"note":string}. ' +
+    'Use "note" for one short sentence about uncertainty. If there is no food, return {"items":[],"note":"No food detected"}.';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: S.ai.model || 'claude-sonnet-5-5', max_tokens: 1024,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: photoB64 } },
+          { type: 'text', text: prompt }] }] })
+    });
+    if (!r.ok) {
+      let msg = ''; try { msg = (await r.json()).error.message; } catch (e) {}
+      throw new Error(r.status === 401 ? 'Invalid API key' : (msg || `AI error ${r.status}`));
+    }
+    const j = await r.json(), txt = (j.content || []).map(c => c.text || '').join('');
+    const m = txt.match(/\{[\s\S]*\}/); if (!m) throw new Error('Unexpected reply from the AI');
+    const out = JSON.parse(m[0]);
+    aiItems = (out.items || []).map(i => ({ name: String(i.name || 'Food'), grams: +i.grams || 0, kcal: +i.kcal || 0,
+      p: +i.protein_g || 0, c: +i.carbs_g || 0, f: +i.fat_g || 0 }));
+    aiNote = String(out.note || ''); renderAi();
+  } catch (e) {
+    const msg = e instanceof TypeError ? 'Could not reach the AI. Check your connection.' : e.message;
+    $('#aiResult').innerHTML = `<li class="muted" style="color:var(--danger)">${esc(msg)}</li>`;
+  } finally { btn.disabled = false; btn.textContent = '✨ Estimate with AI'; }
+}
+function renderAi() {
+  if (!aiItems.length) { $('#aiResult').innerHTML = `<li class="muted">${esc(aiNote || 'No food detected')}</li>`; return; }
+  $('#aiResult').innerHTML = aiItems.map((it, i) => `
+    <li><span style="flex:1">${esc(it.name)}<br><span class="muted">${Math.round(it.grams)} g · P ${it.p.toFixed(0)} · C ${it.c.toFixed(0)} · F ${it.f.toFixed(0)}</span></span>
+    <span style="display:flex;align-items:center;gap:6px"><input type="number" inputmode="numeric" value="${Math.round(it.kcal)}" style="width:76px;padding:8px" onchange="aiItems[${i}].kcal=+this.value||0;updAiTotal()"><span class="muted">kcal</span></span></li>`).join('') +
+    `<li style="display:block"><div class="muted" id="aiTotal"></div>${aiNote ? `<div class="hint">${esc(aiNote)}</div>` : ''}
+     <button class="primary" style="width:100%;margin-top:10px" onclick="logAi()">Log this meal</button></li>`;
+  updAiTotal();
+}
+function updAiTotal() { const t = aiItems.reduce((a, i) => a + i.kcal, 0), e = $('#aiTotal'); if (e) e.textContent = `Total: ${Math.round(t)} kcal`; }
+function logAi() {
+  aiItems.filter(i => i.kcal > 0).forEach(i => addMeal({ meal: mealType, name: i.name, grams: i.grams, kcal: i.kcal, p: i.p, c: i.c, f: i.f }));
+  aiItems = []; photoB64 = null; $('#aiResult').innerHTML = ''; $('#aiBox').style.display = 'none';
+  $('#photo').value = ''; $('#photoPrev').style.display = 'none'; $('#aiHint').value = '';
+}
+function saveAi() {
+  S.ai = { key: $('#aiKey').value.trim(), model: $('#aiModel').value }; save(); toast('AI settings saved');
+}
+function renderAiSettings() {
+  if (document.activeElement !== $('#aiKey')) $('#aiKey').value = (S.ai && S.ai.key) || '';
+  $('#aiModel').value = (S.ai && S.ai.model) || 'claude-sonnet-5-5';
+}
 function renderFood() {
   const list = S.meals[dayKey()] || [];
   const t = list.reduce((a, e) => ({ k: a.k + e.kcal, p: a.p + e.p, c: a.c + e.c, f: a.f + e.f }), { k: 0, p: 0, c: 0, f: 0 });
@@ -750,15 +903,17 @@ function askNotify() {
   Notification.requestPermission().then(p => toast(p === 'granted' ? 'Alerts enabled' : 'Alerts not allowed'));
 }
 function exportData() {
-  const b = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const copy = structuredClone(S); copy.ai = { ...copy.ai, key: '' };   // never put the API key in a backup file
+  const b = new Blob([JSON.stringify(copy, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(b); a.download = `fastlog-${dayKey()}.json`; a.click();
 }
 function importData(file) {
   if (!file) return;
   file.text().then(t => {
-    const d = JSON.parse(t);
+    const d = JSON.parse(t), keep = S.ai;
     S = { ...structuredClone(DEF), ...d, settings: { ...DEF.settings, ...(d.settings || {}) } };
+    S.ai = { ...DEF.ai, ...(d.ai || {}), key: keep.key };
     save(); render(); toast('Imported');
   }).catch(() => toast('Invalid backup file'));
 }
@@ -856,7 +1011,8 @@ function renderOnb() {
     const warn = bmi < 18.5 ? `<div class="hint" style="color:var(--warn)">Your goal weight is below the healthy BMI range (${bmi.toFixed(1)}). Please talk to a doctor before aiming for it.</div>` : '';
     b.innerHTML = `<h2 class="ot">Your plan</h2><p class="sub">Pick a fasting window and adjust the targets if you like.</p>
       <label>Fasting window
-        <div class="chips">${[12, 14, 16, 18, 20].map(h => `<button data-ogoal="${h}" class="${d.goalHours === h ? 'on' : ''}">${h}:${24 - h}</button>`).join('')}</div></label>
+        <div class="chips">${[12, 14, 16, 18, 20, 23].map(h => `<button data-ogoal="${h}" class="${d.goalHours === h ? 'on' : ''}">${h}:${24 - h}</button>`).join('')}</div></label>
+      <div class="hint" id="o_omad" style="display:${d.goalHours >= 23 ? 'block' : 'none'};margin:-4px 0 12px">23:1 means one meal a day. It is demanding, so build up gradually and listen to your body.</div>
       <div class="target"><span class="muted">Estimated daily burn</span><br><b>${d.tdee} kcal</b></div>
       <label>Daily calorie target (kcal)<input id="o_kcal" type="number" inputmode="numeric" value="${d.kcal}"></label>
       <label>Daily water target (ml)<input id="o_water" type="number" inputmode="numeric" value="${d.water}"></label>
@@ -867,7 +1023,10 @@ function renderOnb() {
 document.addEventListener('click', e => {
   const s = e.target.closest('[data-osex]'), g = e.target.closest('[data-ogoal]');
   if (s) { ob.d.sex = s.dataset.osex; s.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === s)); }
-  if (g) { ob.d.goalHours = +g.dataset.ogoal; g.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === g)); }
+  if (g) {
+    ob.d.goalHours = +g.dataset.ogoal; g.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === g));
+    const o = $('#o_omad'); if (o) o.style.display = ob.d.goalHours >= 23 ? 'block' : 'none';
+  }
 });
 function renderProfile() {
   const p = S.profile; if (!p) return;
@@ -891,7 +1050,7 @@ document.addEventListener('click', e => {
 });
 
 function render() {
-  renderFast(); renderFood(); renderWater(); renderWeight(); renderStats(); renderSettings(); renderProfile(); updateRing();
+  renderFast(); renderFood(); renderWater(); renderWeight(); renderStats(); renderSettings(); renderProfile(); renderAiSettings(); updateRing();
 }
 function tick() { updateRing(); }
 
@@ -901,7 +1060,7 @@ syncWidget();
 setInterval(tick, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !isNative()) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
